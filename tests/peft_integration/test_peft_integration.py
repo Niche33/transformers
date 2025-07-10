@@ -13,6 +13,7 @@
 # limitations under the License.
 import importlib
 import os
+import re
 import tempfile
 import unittest
 
@@ -24,6 +25,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    BitsAndBytesConfig,
     OPTForCausalLM,
     Trainer,
     TrainingArguments,
@@ -74,6 +76,12 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
                 break
 
         return is_peft_loaded
+
+    def _get_bnb_4bit_config(self):
+        return BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
+
+    def _get_bnb_8bit_config(self):
+        return BitsAndBytesConfig(load_in_8bit=True)
 
     def test_peft_from_pretrained(self):
         """
@@ -385,7 +393,7 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
 
                 # Delete remaining adapter
                 model.delete_adapter("adapter_2")
-                self.assertNotIn("adapter_2", model.peft_config)
+                self.assertFalse(hasattr(model, "peft_config"))
                 self.assertFalse(model._hf_peft_config_loaded)
 
                 # Re-add adapters for edge case tests
@@ -394,11 +402,16 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
 
                 # Attempt to delete multiple adapters at once
                 model.delete_adapter(["adapter_1", "adapter_2"])
-                self.assertNotIn("adapter_1", model.peft_config)
-                self.assertNotIn("adapter_2", model.peft_config)
+                self.assertFalse(hasattr(model, "peft_config"))
                 self.assertFalse(model._hf_peft_config_loaded)
 
                 # Test edge cases
+                msg = re.escape("No adapter loaded. Please load an adapter first.")
+                with self.assertRaisesRegex(ValueError, msg):
+                    model.delete_adapter("nonexistent_adapter")
+
+                model.add_adapter(peft_config_1, adapter_name="adapter_1")
+
                 with self.assertRaisesRegex(ValueError, "The following adapter\\(s\\) are not present"):
                     model.delete_adapter("nonexistent_adapter")
 
@@ -406,13 +419,8 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
                     model.delete_adapter(["adapter_1", "nonexistent_adapter"])
 
                 # Deleting with an empty list or None should not raise errors
-                model.add_adapter(peft_config_1, adapter_name="adapter_1")
                 model.add_adapter(peft_config_2, adapter_name="adapter_2")
                 model.delete_adapter([])  # No-op
-                self.assertIn("adapter_1", model.peft_config)
-                self.assertIn("adapter_2", model.peft_config)
-
-                model.delete_adapter(None)  # No-op
                 self.assertIn("adapter_1", model.peft_config)
                 self.assertIn("adapter_2", model.peft_config)
 
@@ -430,7 +438,10 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         """
         for model_id in self.peft_test_model_ids:
             for transformers_class in self.transformers_test_model_classes:
-                peft_model = transformers_class.from_pretrained(model_id, load_in_8bit=True, device_map="auto")
+                bnb_config = self._get_bnb_8bit_config()
+                peft_model = transformers_class.from_pretrained(
+                    model_id, device_map="auto", quantization_config=bnb_config
+                )
 
                 module = peft_model.model.decoder.layers[0].self_attn.v_proj
                 self.assertTrue(module.__class__.__name__ == "Linear8bitLt")
@@ -448,7 +459,10 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         # 4bit
         for model_id in self.peft_test_model_ids:
             for transformers_class in self.transformers_test_model_classes:
-                peft_model = transformers_class.from_pretrained(model_id, load_in_4bit=True, device_map="auto")
+                bnb_config = self._get_bnb_4bit_config()
+                peft_model = transformers_class.from_pretrained(
+                    model_id, device_map="auto", quantization_config=bnb_config
+                )
 
                 module = peft_model.model.decoder.layers[0].self_attn.v_proj
                 self.assertTrue(module.__class__.__name__ == "Linear4bit")
@@ -464,7 +478,10 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         # 8-bit
         for model_id in self.peft_test_model_ids:
             for transformers_class in self.transformers_test_model_classes:
-                peft_model = transformers_class.from_pretrained(model_id, load_in_8bit=True, device_map="auto")
+                bnb_config = self._get_bnb_8bit_config()
+                peft_model = transformers_class.from_pretrained(
+                    model_id, device_map="auto", quantization_config=bnb_config
+                )
 
                 module = peft_model.model.decoder.layers[0].self_attn.v_proj
                 self.assertTrue(module.__class__.__name__ == "Linear8bitLt")
@@ -488,7 +505,10 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         # 4bit
         for model_id in self.peft_test_model_ids:
             for transformers_class in self.transformers_test_model_classes:
-                peft_model = transformers_class.from_pretrained(model_id, load_in_4bit=True, device_map="auto")
+                bnb_config = self._get_bnb_4bit_config()
+                peft_model = transformers_class.from_pretrained(
+                    model_id, device_map="auto", quantization_config=bnb_config
+                )
 
                 module = peft_model.model.decoder.layers[0].self_attn.v_proj
                 self.assertTrue(module.__class__.__name__ == "Linear4bit")
@@ -504,7 +524,10 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         # 8-bit
         for model_id in self.peft_test_model_ids:
             for transformers_class in self.transformers_test_model_classes:
-                peft_model = transformers_class.from_pretrained(model_id, load_in_8bit=True, device_map="auto")
+                bnb_config = self._get_bnb_8bit_config()
+                peft_model = transformers_class.from_pretrained(
+                    model_id, device_map="auto", quantization_config=bnb_config
+                )
 
                 module = peft_model.model.decoder.layers[0].self_attn.v_proj
                 self.assertTrue(module.__class__.__name__ == "Linear8bitLt")
@@ -530,7 +553,7 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
             peft_params = list(peft_pipe.model.parameters())
             base_params = list(base_pipe.model.parameters())
             self.assertNotEqual(len(peft_params), len(base_params))  # Assert we actually loaded the adapter too
-            _ = peft_pipe("Hello")
+            _ = peft_pipe("Hello", max_new_tokens=20)
 
     def test_peft_add_adapter_with_state_dict(self):
         """
@@ -832,7 +855,6 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
 
         # Input text for testing
         text = "Who is a Elon Musk?"
-        expected_error_msg = "The model 'PeftModel' is not supported for text-generation"
 
         model = AutoModelForCausalLM.from_pretrained(
             BASE_PATH,
@@ -849,7 +871,7 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
         # Create pipeline with PEFT model while capturing log output
         # Check that the warning message is not present in the logs
         pipeline_logger = logging.get_logger("transformers.pipelines.base")
-        with self.assertNoLogs(pipeline_logger, logging.ERROR) as cl:
+        with self.assertNoLogs(pipeline_logger, logging.ERROR):
             lora_generator = pipeline(
                 task="text-generation",
                 model=lora_model,
@@ -858,9 +880,4 @@ class PeftIntegrationTester(unittest.TestCase, PeftTesterMixin):
             )
 
             # Generate text to verify pipeline works
-            _ = lora_generator(text)
-
-        # Check that the warning message is not present in the logs
-        self.assertNotIn(
-            expected_error_msg, cl.out, f"Error message '{expected_error_msg}' should not appear when using PeftModel"
-        )
+            _ = lora_generator(text, max_new_tokens=20)

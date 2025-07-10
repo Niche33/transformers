@@ -23,6 +23,7 @@ rendered properly in your Markdown viewer.
         ">
         <img alt="FlashAttention" src="https://img.shields.io/badge/%E2%9A%A1%EF%B8%8E%20FlashAttention-eae0c8?style=flat">
         <img alt="SDPA" src="https://img.shields.io/badge/SDPA-DE3412?style=flat&logo=pytorch&logoColor=white">
+        <img alt="Tensor parallelism" src="https://img.shields.io/badge/Tensor%20parallelism-06b6d4?style=flat&logoColor=white">
     </div>
 </div>
 
@@ -80,10 +81,10 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
 </hfoption>
-<hfoption id="transformers-cli">
+<hfoption id="transformers CLI">
 
 ```bash
-echo -e "LLMs generate text through a process known as" | transformers-cli run --task text-generation --model google/gemma-2b --device 0
+echo -e "LLMs generate text through a process known as" | transformers run --task text-generation --model google/gemma-2b --device 0
 ```
 
 </hfoption>
@@ -114,8 +115,8 @@ model = AutoModelForCausalLM.from_pretrained(
 input_text = "LLMs generate text through a process known as."
 input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
 outputs = model.generate(
-    **input_ids, 
-    max_new_tokens=50, 
+    **input_ids,
+    max_new_tokens=50,
     cache_implementation="static"
 )
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
@@ -127,7 +128,7 @@ Use the [AttentionMaskVisualizer](https://github.com/huggingface/transformers/bl
 from transformers.utils.attention_visualizer import AttentionMaskVisualizer
 
 visualizer = AttentionMaskVisualizer("google/gemma-2b")
-visualizer("LLMs generate text through a process known as") 
+visualizer("LLMs generate text through a process known as")
 ```
 
 <div class="flex justify-center">
